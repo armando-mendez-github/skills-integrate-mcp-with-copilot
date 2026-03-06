@@ -10,9 +10,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 from pathlib import Path
+import re
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
+
+# Reject obvious SQL payload patterns in user-supplied fields.
+SQL_PAYLOAD_PATTERN = re.compile(
+    r"(;|--|/\*|\*/|\b(select|insert|update|delete|drop|alter|create|union|exec|pragma|attach)\b)",
+    flags=re.IGNORECASE,
+)
 
 # Mount the static files directory
 current_dir = Path(__file__).parent
@@ -88,9 +95,21 @@ def get_activities():
     return activities
 
 
+def reject_sql_like_input(field_name: str, value: str) -> None:
+    """Block payloads that look like SQL fragments to reduce injection risk."""
+    if SQL_PAYLOAD_PATTERN.search(value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Potential SQL payload detected in '{field_name}'",
+        )
+
+
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
     """Sign up a student for an activity"""
+    reject_sql_like_input("activity_name", activity_name)
+    reject_sql_like_input("email", email)
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -113,6 +132,9 @@ def signup_for_activity(activity_name: str, email: str):
 @app.delete("/activities/{activity_name}/unregister")
 def unregister_from_activity(activity_name: str, email: str):
     """Unregister a student from an activity"""
+    reject_sql_like_input("activity_name", activity_name)
+    reject_sql_like_input("email", email)
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")

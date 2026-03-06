@@ -48,3 +48,25 @@ The application uses a simple data model with meaningful identifiers:
    - Grade level
 
 All data is stored in memory, which means data will be reset when the server restarts.
+
+## Security Conventions
+
+- Do not add endpoints that accept raw SQL strings from users.
+- Validate user-supplied values before they reach persistence/query layers.
+- When database support is introduced, use parameterized queries or ORM-generated SQL only.
+
+Unsafe pattern (never allow):
+
+```python
+# Never execute user input as SQL
+cursor.execute(user_sql)
+```
+
+Safe pattern (parameterized):
+
+```python
+cursor.execute(
+   "SELECT * FROM activities WHERE name = ?",
+   (activity_name,),
+)
+```
